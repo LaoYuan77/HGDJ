@@ -1,0 +1,41 @@
+name: Build iOS Tweak
+
+# 当推送到 main 分支，或者手动点击运行资源时触发
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+    - name: 检出你的代码
+      uses: actions/checkout@v3
+
+    - name: 准备 Theos 环境
+      uses: actions/checkout@v3
+      with:
+        repository: theos/theos
+        path: theos
+        submodules: true
+
+    - name: 下载 iOS SDK
+      run: |
+        git clone https://github.com/theos/sdks.git theos/sdks
+
+    - name: 编译 Tweak
+      env:
+        THEOS: ${{ github.workspace }}/theos
+      run: |
+        # 赋予 make 权限并执行编译，FINALPACKAGE=1 代表编译 Release 版本
+        make clean
+        make FINALPACKAGE=1
+
+    - name: 提取并上传 dylib 文件
+      uses: actions/upload-artifact@v3
+      with:
+        name: HongGuoPatch-Dylib
+        # 编译产物通常在这个路径下
+        path: .theos/obj/**/*.dylib
