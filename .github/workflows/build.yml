@@ -1,6 +1,5 @@
 name: Build iOS Tweak
 
-# 当推送到 main 分支，或者手动点击运行资源时触发
 on:
   push:
     branches: [ main ]
@@ -23,16 +22,19 @@ jobs:
 
     - name: 下载 iOS SDK
       run: |
-        # 增加这一行：先强制删除 Theos 自带的 sdks 目录
         rm -rf theos/sdks 
-        # 然后再重新克隆完整的 SDK
         git clone https://github.com/theos/sdks.git theos/sdks
+
+    # -------- 这里是新增的步骤 --------
+    - name: 安装依赖 (ldid)
+      run: |
+        brew install ldid
+    # --------------------------------
 
     - name: 编译 Tweak
       env:
         THEOS: ${{ github.workspace }}/theos
       run: |
-        # 赋予 make 权限并执行编译，FINALPACKAGE=1 代表编译 Release 版本
         make clean
         make FINALPACKAGE=1
 
@@ -40,5 +42,11 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: HongGuoPatch-Dylib
-        # 编译产物通常在这个路径下
         path: .theos/obj/**/*.dylib
+
+
+
+
+
+
+        
