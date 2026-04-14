@@ -1,5 +1,9 @@
 #import <UIKit/UIKit.h>
 
+// 欺骗编译器，声明 BDXTabBar 是一个 UIView，使其能够合法调用 bounds 和 subviews
+@interface BDXTabBar : UIView
+@end
+
 // ==========================================
 // 模块一：UI 视觉层暴力强杀底栏“福利”并强制居中
 // ==========================================
