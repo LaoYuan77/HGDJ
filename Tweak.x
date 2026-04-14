@@ -1,55 +1,79 @@
 #import <UIKit/UIKit.h>
 
 // ==========================================
-// 模块一：移除“福利”并自动重排版居中
+// 模块一：移除“福利”并自动重排版居中 (增强拦截版)
 // ==========================================
-// 字节系App虽然有自定义的 SSTabBar，但其根视图控制器通常依然继承或使用了标准的 UITabBarController 机制
+
 %hook UITabBarController
 
+// 拦截入口 1：带动画的 Controller 赋值
 - (void)setViewControllers:(NSArray<UIViewController *> *)viewControllers animated:(BOOL)animated {
-    NSMutableArray *newControllers = [viewControllers mutableCopy];
-    
+    NSMutableArray *newControllers = [NSMutableArray array];
     for (UIViewController *vc in viewControllers) {
-        // 通过判断 tabBarItem 的 title 来精准定位并移除“福利”页面
-        if ([vc.tabBarItem.title isEqualToString:@"福利"]) {
-            [newControllers removeObject:vc];
-            break;
+        // 同时判断 title 和 tabBarItem.title，防止漏网
+        if (![vc.tabBarItem.title isEqualToString:@"福利"] && ![vc.title isEqualToString:@"福利"]) {
+            [newControllers addObject:vc];
         }
     }
-    
-    // 移除后，iOS 系统自带的布局引擎会自动将剩下的 3 个 Tab（首页、剧场、我的）等宽居中对齐
     %orig([newControllers copy], animated);
+}
+
+// 拦截入口 2：不带动画的 Controller 赋值（大多 App 初始化走这里）
+- (void)setViewControllers:(NSArray<UIViewController *> *)viewControllers {
+    NSMutableArray *newControllers = [NSMutableArray array];
+    for (UIViewController *vc in viewControllers) {
+        if (![vc.tabBarItem.title isEqualToString:@"福利"] && ![vc.title isEqualToString:@"福利"]) {
+            [newControllers addObject:vc];
+        }
+    }
+    %orig([newControllers copy]);
+}
+
+%end
+
+// 拦截入口 3：直接操作 UITabBar Item 的底层赋值 (针对字节系的部分自定义情况)
+%hook UITabBar
+
+- (void)setItems:(NSArray<UITabBarItem *> *)items animated:(BOOL)animated {
+    NSMutableArray *newItems = [NSMutableArray array];
+    for (UITabBarItem *item in items) {
+        if (![item.title isEqualToString:@"福利"]) {
+            [newItems addObject:item];
+        }
+    }
+    %orig([newItems copy], animated);
+}
+
+- (void)setItems:(NSArray<UITabBarItem *> *)items {
+    NSMutableArray *newItems = [NSMutableArray array];
+    for (UITabBarItem *item in items) {
+        if (![item.title isEqualToString:@"福利"]) {
+            [newItems addObject:item];
+        }
+    }
+    %orig([newItems copy]);
 }
 
 %end
 
 
 // ==========================================
-// 模块二：基于 TTVideoEngine 强制高清晰度
+// 模块二：基于 TTVideoEngine 强制高清晰度 (UI 修复版)
 // ==========================================
-// 根据提取的头文件，已确认播放器核心为 TTVideoEngine
 %hook TTVideoEngine
 
-// 1. 拦截使用数字枚举配置分辨率的方法
-// 在字节系的定义中，通常 0-Auto, 1-SD(标清), 2-HD(高清), 3-FHD(超清), 4-1080P, 5-4K
+// 只拦截写入操作，强制底层引擎走 1080P
 - (void)configResolution:(NSUInteger)resolution {
-    // 强制把所有请求都篡改为 4 (1080P)
     %orig(4); 
 }
 
-// 2. 拦截使用字符串配置分辨率的方法（新版本可能倾向于用字符串）
 - (void)configResolutionString:(NSString *)resString {
-    // 强制使用 1080p 字符串
+    // 强制把内部请求的字符串改为 1080p
     %orig(@"1080p");
 }
 
-// 3. 欺骗上层业务逻辑，告诉它当前播放的就是 1080P
-- (NSUInteger)currentResolution {
-    return 4;
-}
-
-- (NSString *)currentResolutionString {
-    return @"1080p";
-}
+// 【关键修复】：已删除了对 currentResolution 等读取方法的拦截。
+// UI 读取到的依然是正常的内部状态，所以文字会恢复显示。
+// 但实际播放时，底层的数据流已经被上面的 config 方法劫持了。
 
 %end
