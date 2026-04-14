@@ -1,65 +1,103 @@
 #import <UIKit/UIKit.h>
 
-// 欺骗编译器，声明 BDXTabBar 是一个 UIView，使其能够合法调用 bounds 和 subviews
+// 欺骗编译器，声明这是视图
 @interface BDXTabBar : UIView
 @end
+@interface BDXTabBarButton : UIControl
+@end
+
+// 声明全局变量存储“福利”按钮的尸体位置
+static UIView *g_welfareButton = nil;
 
 // ==========================================
-// 模块一：UI 视觉层暴力强杀底栏“福利”并强制居中
+// 模块一：文字级精准暗杀 (监听所有文本赋值)
+// ==========================================
+%hook UILabel
+
+// 拦截普通文字赋值
+- (void)setText:(NSString *)text {
+    %orig(text);
+    if ([text isEqualToString:@"福利"]) {
+        UIView *view = self;
+        // 向上层层扒皮，直到找到底栏按钮
+        while (view.superview) {
+            view = view.superview;
+            if ([NSStringFromClass([view class]) isEqualToString:@"BDXTabBarButton"]) {
+                g_welfareButton = view;      // 记录目标
+                view.hidden = YES;           // 物理隐藏
+                view.alpha = 0;              // 视觉隐身
+                view.frame = CGRectZero;     // 捏碎体积
+                
+                // 强制要求它的父级（也就是整个底栏）立刻重新排版！
+                if ([view.superview isKindOfClass:NSClassFromString(@"BDXTabBar")]) {
+                    [view.superview setNeedsLayout];
+                    [view.superview layoutIfNeeded];
+                }
+                break;
+            }
+        }
+    }
+}
+
+// 拦截富文本赋值（防一手字节用富文本渲染）
+- (void)setAttributedText:(NSAttributedString *)attributedText {
+    %orig(attributedText);
+    if ([attributedText.string isEqualToString:@"福利"]) {
+        UIView *view = self;
+        while (view.superview) {
+            view = view.superview;
+            if ([NSStringFromClass([view class]) isEqualToString:@"BDXTabBarButton"]) {
+                g_welfareButton = view;
+                view.hidden = YES;
+                view.alpha = 0;
+                view.frame = CGRectZero;
+                
+                if ([view.superview isKindOfClass:NSClassFromString(@"BDXTabBar")]) {
+                    [view.superview setNeedsLayout];
+                    [view.superview layoutIfNeeded];
+                }
+                break;
+            }
+        }
+    }
+}
+
+%end
+
+
+// ==========================================
+// 模块二：打扫战场并强制居中
 // ==========================================
 %hook BDXTabBar
 
 - (void)layoutSubviews {
-    // 1. 先让系统原本的排版逻辑跑完
-    %orig; 
-    
-    NSMutableArray *validButtons = [NSMutableArray array];
-    UIView *welfareButton = nil;
-    
-    // 2. 遍历整个底栏里的所有组件
+    %orig; // 让字节自己的排版先跑完
+
+    NSMutableArray *activeButtons = [NSMutableArray array];
+
+    // 收集所有还活着的按钮
     for (UIView *subview in self.subviews) {
-        NSString *className = NSStringFromClass([subview class]);
-        if ([className containsString:@"Button"] || [className containsString:@"Item"]) {
-            
-            BOOL isWelfare = NO;
-            
-            // 3. 像剥洋葱一样寻找“福利”标签
-            for (UIView *deepView in subview.subviews) {
-                if ([deepView isKindOfClass:[UILabel class]]) {
-                    if ([[(UILabel *)deepView text] isEqualToString:@"福利"]) {
-                        isWelfare = YES; break;
-                    }
-                }
-                for (UIView *deeperView in deepView.subviews) {
-                    if ([deeperView isKindOfClass:[UILabel class]]) {
-                        if ([[(UILabel *)deeperView text] isEqualToString:@"福利"]) {
-                            isWelfare = YES; break;
-                        }
-                    }
-                }
-            }
-            
-            // 4. 判断并分类
-            if (isWelfare) {
-                welfareButton = subview;
-                subview.hidden = YES;          // 强行隐藏
-                subview.frame = CGRectZero;    // 体积缩成0
+        if ([NSStringFromClass([subview class]) isEqualToString:@"BDXTabBarButton"]) {
+            if (subview == g_welfareButton) {
+                // 确保它死透了
+                subview.hidden = YES;
+                subview.frame = CGRectZero;
             } else {
-                [validButtons addObject:subview];
+                [activeButtons addObject:subview];
             }
         }
     }
-    
-    // 5. 暴力重排：把剩下的按钮均匀铺满屏幕
-    if (welfareButton && validButtons.count > 0) {
+
+    // 暴力重排：把剩下的按钮均匀铺满屏幕
+    if (g_welfareButton && activeButtons.count > 0) {
         CGFloat totalWidth = self.bounds.size.width;
-        CGFloat newButtonWidth = totalWidth / validButtons.count;
-        
-        for (NSInteger i = 0; i < validButtons.count; i++) {
-            UIView *btn = validButtons[i];
+        CGFloat newWidth = totalWidth / activeButtons.count;
+
+        for (NSInteger i = 0; i < activeButtons.count; i++) {
+            UIView *btn = activeButtons[i];
             CGRect frame = btn.frame;
-            frame.origin.x = i * newButtonWidth;
-            frame.size.width = newButtonWidth;
+            frame.origin.x = i * newWidth;
+            frame.size.width = newWidth;
             btn.frame = frame;
         }
     }
@@ -69,7 +107,7 @@
 
 
 // ==========================================
-// 模块二：基于 TTVideoEngine 强制 1080P
+// 模块三：基于 TTVideoEngine 强制 1080P (稳定版)
 // ==========================================
 %hook TTVideoEngine
 
