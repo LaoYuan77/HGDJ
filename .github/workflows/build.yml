@@ -12,10 +12,10 @@ jobs:
 
     steps:
     - name: 检出你的代码
-      uses: actions/checkout@v4  # 这里升级到了 v4
+      uses: actions/checkout@v4
 
     - name: 准备 Theos 环境
-      uses: actions/checkout@v4  # 这里升级到了 v4
+      uses: actions/checkout@v4
       with:
         repository: theos/theos
         path: theos
@@ -23,6 +23,9 @@ jobs:
 
     - name: 下载 iOS SDK
       run: |
+        # 增加这一行：先强制删除 Theos 自带的 sdks 目录
+        rm -rf theos/sdks 
+        # 然后再重新克隆完整的 SDK
         git clone https://github.com/theos/sdks.git theos/sdks
 
     - name: 编译 Tweak
@@ -34,7 +37,7 @@ jobs:
         make FINALPACKAGE=1
 
     - name: 提取并上传 dylib 文件
-      uses: actions/upload-artifact@v4  # 这里升级到了 v4
+      uses: actions/upload-artifact@v4
       with:
         name: HongGuoPatch-Dylib
         # 编译产物通常在这个路径下
