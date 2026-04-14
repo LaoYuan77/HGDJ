@@ -1,38 +1,33 @@
 #import <UIKit/UIKit.h>
 
 // ==========================================
-// 辅助函数：通用的“福利”过滤机制
-// 兼顾 ViewController 和 自定义 Item 模型
+// 辅助函数：精准过滤“福利”页面
 // ==========================================
-static NSArray* filterWelfare(NSArray *items) {
-    if (!items || items.count == 0) return items;
+static NSArray* filterWelfare(NSArray *viewControllers) {
+    if (!viewControllers || viewControllers.count == 0) return viewControllers;
     
-    NSMutableArray *newItems = [NSMutableArray array];
-    for (id item in items) {
-        NSString *title = @"";
-        // 如果数组里装的是 UIViewController
-        if ([item respondsToSelector:@selector(tabBarItem)]) {
-            title = [[item tabBarItem] title];
-        } 
-        // 兜底：如果数组里装的是某种直接带有 title 属性的自定义配置模型
-        if (!title && [item respondsToSelector:@selector(title)]) {
-            title = [item title];
+    NSMutableArray *newControllers = [NSMutableArray array];
+    for (UIViewController *vc in viewControllers) {
+        // 尝试获取各种可能存在的标题
+        NSString *title = vc.tabBarItem.title;
+        if (!title) {
+            title = vc.title;
         }
         
-        // 只要标题不是“福利”，就放行
+        // 只要标题不是“福利”，就保留
         if (![title isEqualToString:@"福利"]) {
-            [newItems addObject:item];
+            [newControllers addObject:vc];
         }
     }
-    return [newItems copy];
+    return [newControllers copy];
 }
 
 // ==========================================
-// 模块一：精准狙击字节自定义底栏大管家
+// 模块一：精准狙击红果的真实底层大管家
 // ==========================================
-%hook BDXTabBarController
+%hook HGMainTabBarController
 
-// 拦截初始化和赋值方法
+// 拦截初始化和赋值方法，在这个源头把包含“福利”的控制器剔除
 - (void)setViewControllers:(NSArray *)viewControllers {
     %orig(filterWelfare(viewControllers));
 }
@@ -42,7 +37,6 @@ static NSArray* filterWelfare(NSArray *items) {
 }
 
 %end
-
 
 // ==========================================
 // 模块二：基于 TTVideoEngine 强制高清晰度 
