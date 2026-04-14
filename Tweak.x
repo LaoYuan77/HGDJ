@@ -1,71 +1,75 @@
 #import <UIKit/UIKit.h>
 
-@interface BDXTabBar : UIView
+// 声明真实存在的类，骗过编译器
+@interface SSTabBar : UIView
 @end
-@interface BDXTabBarButton : UIView
+@interface SSTabBarTextButton : UIControl
 @end
 
-// ==========================================
-// 模块一：针对 BDXTabBarButton 的直接扑杀
-// ==========================================
-%hook BDXTabBarButton
+// 记录被击杀的按钮
+static UIView *g_welfareButton = nil;
 
-// layoutSubviews 是它每次在屏幕上绘制自己时必走的方法
+// ==========================================
+// 模块一：针对 SSTabBar 的无损重排版
+// ==========================================
+%hook SSTabBar
+
 - (void)layoutSubviews {
+    // 1. 先让系统原本的排版（AutoLayout）全部跑完，绝不破坏系统底层逻辑
     %orig;
-    
-    // 每次重绘，都像安检一样查自己肚子里有没有“福利”
-    BOOL isWelfare = NO;
-    for (UIView *v in self.subviews) {
-        if ([v isKindOfClass:[UILabel class]] && [[(UILabel *)v text] isEqualToString:@"福利"]) {
-            isWelfare = YES; break;
-        }
-        // 往下深挖一层
-        for (UIView *subV in v.subviews) {
-            if ([subV isKindOfClass:[UILabel class]] && [[(UILabel *)subV text] isEqualToString:@"福利"]) {
-                isWelfare = YES; break;
-            }
-        }
-    }
-    
-    // 查出是福利按钮，当场自杀
-    if (isWelfare) {
-        self.hidden = YES;
-        self.alpha = 0;
-        // 关键：把宽度设为 0，防止它隐身了还占着茅坑
-        CGRect frame = self.frame;
-        frame.size.width = 0;
-        self.frame = frame;
-    }
-}
-
-%end
-
-// ==========================================
-// 模块二：打扫战场，强制存活的按钮瓜分地盘
-// ==========================================
-%hook BDXTabBar
-
-- (void)layoutSubviews {
-    %orig; // 让字节的烂摊子排版先跑完
     
     NSMutableArray *activeButtons = [NSMutableArray array];
     
-    // 把没隐藏的、存活的按钮挑出来
+    // 2. 遍历底栏里的所有视图
     for (UIView *subview in self.subviews) {
-        if ([NSStringFromClass([subview class]) isEqualToString:@"BDXTabBarButton"]) {
-            if (!subview.hidden && subview.frame.size.width > 0) {
-                [activeButtons addObject:subview];
+        // 精准抓取从 dylib 里破译出来的核心类：SSTabBarTextButton
+        if ([NSStringFromClass([subview class]) isEqualToString:@"SSTabBarTextButton"]) {
+            
+            BOOL isWelfare = NO;
+            
+            // 深度遍历寻找包含“福利”的 UILabel
+            for (UIView *deepView in subview.subviews) {
+                if ([deepView isKindOfClass:[UILabel class]] && [[(UILabel *)deepView text] isEqualToString:@"福利"]) {
+                    isWelfare = YES; break;
+                }
+                for (UIView *deeperView in deepView.subviews) {
+                    if ([deeperView isKindOfClass:[UILabel class]] && [[(UILabel *)deeperView text] isEqualToString:@"福利"]) {
+                        isWelfare = YES; break;
+                    }
+                }
+            }
+            
+            // 3. 发现目标，彻底抹除
+            if (isWelfare) {
+                g_welfareButton = subview;
+                subview.hidden = YES;
+                subview.alpha = 0;
+                subview.userInteractionEnabled = NO; // 禁止它接收任何点击
+                // 把宽度强行捏成 0
+                CGRect zeroFrame = subview.frame;
+                zeroFrame.size.width = 0;
+                subview.frame = zeroFrame;
+            } else {
+                // 把存活的正常按钮收集起来
+                if (!subview.hidden && subview.frame.size.width > 0) {
+                    [activeButtons addObject:subview];
+                }
             }
         }
     }
     
-    // 重新瓜分屏幕宽度 (如果有存活按钮，且总数小于4，说明福利被干掉了)
-    if (activeButtons.count > 0 && activeButtons.count < 4) {
-        CGFloat newWidth = self.bounds.size.width / activeButtons.count;
+    // 4. 核心修复：完美瓜分屏幕宽度
+    // 如果福利按钮被删了，且剩下的按钮总数少于4个，立刻重新分配领地
+    if (g_welfareButton && activeButtons.count > 0 && activeButtons.count < 4) {
+        // 获取整个底栏的物理宽度
+        CGFloat screenWidth = self.bounds.size.width;
+        // 计算剩下的按钮一人该分多宽
+        CGFloat newWidth = screenWidth / activeButtons.count;
+        
         for (NSInteger i = 0; i < activeButtons.count; i++) {
             UIView *btn = activeButtons[i];
             CGRect frame = btn.frame;
+            // 重新分配 X 坐标和宽度，高度和 Y 轴保持原样不变！
             frame.origin.x = i * newWidth;
             frame.size.width = newWidth;
             btn.frame = frame;
@@ -76,7 +80,7 @@
 %end
 
 // ==========================================
-// 模块三：基于 TTVideoEngine 强制 1080P (保持稳定)
+// 模块二：基于 TTVideoEngine 强制 1080P (稳定版)
 // ==========================================
 %hook TTVideoEngine
 
