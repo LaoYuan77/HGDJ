@@ -1,79 +1,61 @@
 #import <UIKit/UIKit.h>
 
 // ==========================================
-// 模块一：移除“福利”并自动重排版居中 (增强拦截版)
+// 辅助函数：通用的“福利”过滤机制
+// 兼顾 ViewController 和 自定义 Item 模型
 // ==========================================
-
-%hook UITabBarController
-
-// 拦截入口 1：带动画的 Controller 赋值
-- (void)setViewControllers:(NSArray<UIViewController *> *)viewControllers animated:(BOOL)animated {
-    NSMutableArray *newControllers = [NSMutableArray array];
-    for (UIViewController *vc in viewControllers) {
-        // 同时判断 title 和 tabBarItem.title，防止漏网
-        if (![vc.tabBarItem.title isEqualToString:@"福利"] && ![vc.title isEqualToString:@"福利"]) {
-            [newControllers addObject:vc];
-        }
-    }
-    %orig([newControllers copy], animated);
-}
-
-// 拦截入口 2：不带动画的 Controller 赋值（大多 App 初始化走这里）
-- (void)setViewControllers:(NSArray<UIViewController *> *)viewControllers {
-    NSMutableArray *newControllers = [NSMutableArray array];
-    for (UIViewController *vc in viewControllers) {
-        if (![vc.tabBarItem.title isEqualToString:@"福利"] && ![vc.title isEqualToString:@"福利"]) {
-            [newControllers addObject:vc];
-        }
-    }
-    %orig([newControllers copy]);
-}
-
-%end
-
-// 拦截入口 3：直接操作 UITabBar Item 的底层赋值 (针对字节系的部分自定义情况)
-%hook UITabBar
-
-- (void)setItems:(NSArray<UITabBarItem *> *)items animated:(BOOL)animated {
+static NSArray* filterWelfare(NSArray *items) {
+    if (!items || items.count == 0) return items;
+    
     NSMutableArray *newItems = [NSMutableArray array];
-    for (UITabBarItem *item in items) {
-        if (![item.title isEqualToString:@"福利"]) {
+    for (id item in items) {
+        NSString *title = @"";
+        // 如果数组里装的是 UIViewController
+        if ([item respondsToSelector:@selector(tabBarItem)]) {
+            title = [[item tabBarItem] title];
+        } 
+        // 兜底：如果数组里装的是某种直接带有 title 属性的自定义配置模型
+        if (!title && [item respondsToSelector:@selector(title)]) {
+            title = [item title];
+        }
+        
+        // 只要标题不是“福利”，就放行
+        if (![title isEqualToString:@"福利"]) {
             [newItems addObject:item];
         }
     }
-    %orig([newItems copy], animated);
+    return [newItems copy];
 }
 
-- (void)setItems:(NSArray<UITabBarItem *> *)items {
-    NSMutableArray *newItems = [NSMutableArray array];
-    for (UITabBarItem *item in items) {
-        if (![item.title isEqualToString:@"福利"]) {
-            [newItems addObject:item];
-        }
-    }
-    %orig([newItems copy]);
+// ==========================================
+// 模块一：精准狙击字节自定义底栏大管家
+// ==========================================
+%hook BDXTabBarController
+
+// 拦截初始化和赋值方法
+- (void)setViewControllers:(NSArray *)viewControllers {
+    %orig(filterWelfare(viewControllers));
+}
+
+- (void)setViewControllers:(NSArray *)viewControllers animated:(BOOL)animated {
+    %orig(filterWelfare(viewControllers), animated);
 }
 
 %end
 
 
 // ==========================================
-// 模块二：基于 TTVideoEngine 强制高清晰度 (UI 修复版)
+// 模块二：基于 TTVideoEngine 强制高清晰度 
+// (已测试成功，保持原样)
 // ==========================================
 %hook TTVideoEngine
 
-// 只拦截写入操作，强制底层引擎走 1080P
 - (void)configResolution:(NSUInteger)resolution {
     %orig(4); 
 }
 
 - (void)configResolutionString:(NSString *)resString {
-    // 强制把内部请求的字符串改为 1080p
     %orig(@"1080p");
 }
-
-// 【关键修复】：已删除了对 currentResolution 等读取方法的拦截。
-// UI 读取到的依然是正常的内部状态，所以文字会恢复显示。
-// 但实际播放时，底层的数据流已经被上面的 config 方法劫持了。
 
 %end
