@@ -1,0 +1,9 @@
+Package: com.yourname.hongguopatch
+Name: HongGuoPatch
+Depends: mobilesubstrate
+Version: 1.0.0
+Architecture: iphoneos-arm64
+Description: Remove specific tab and force 1080P
+Maintainer: YourName
+Author: YourName
+Section: Tweaks
